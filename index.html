@@ -45,7 +45,7 @@
                 for (let char of ALPHABET) {
                     let attempt = secret + char;
                     document.getElementById('status').innerText = "Testing: " + attempt;
-                    
+                    report("TRY:_" + char + "_attempt:_" + attempt);
                     if (await probe(attempt)) {
                         secret += char;
                         report("Found_Char:_" + char + "_Current:_" + secret);
